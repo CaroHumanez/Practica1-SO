@@ -1,4 +1,4 @@
-// robot1.c - Empaca pares AB
+// robot2.c - Empaca pares AC
 
 #include <stdio.h>      
 #include <stdlib.h>    
@@ -32,13 +32,13 @@ int main() {
     // 3. Abrir semáforos
     sem_prod = sem_open("/sem_prod", 0);
     if (sem_prod == SEM_FAILED) {
-        perror("robot1: Error al abrir semáforo /sem_prod");
+        perror("robot2: Error al abrir semáforo /sem_prod");
         exit(1);
     }
 
     sem_cons = sem_open("/sem_cons", 0);
     if (sem_cons == SEM_FAILED) {
-        perror("robot1: Error al abrir semáforo /sem_cons");
+        perror("robot2: Error al abrir semáforo /sem_cons");
         exit(1);
     }
 
@@ -51,32 +51,32 @@ int main() {
         producto[1] = cinta[1];
         producto[2] = '\0';
 
-        if (strcmp(producto, "AB") == 0) {
-            printf("Robot 1 empaqueta productos AB\n");
+        if (strcmp(producto, "AC") == 0) {
+            printf("Robot 2 empaqueta productos AC\n");
             cp++;
             cinta[0] = '-';
             cinta[1] = '-';
             sem_post(sem_prod);
         } else if (strcmp(producto, "ZZ") == 0) {
-            printf("Robot 1 recibió el ZZ de fin\n");
+            printf("Robot 2 recibió el ZZ de fin\n");
             sem_post(sem_prod); // liberar antes de salir
             break;
         } else {
             // No es su producto → liberar cinta
-            printf("Robot 1 ignora producto %s y libera cinta\n", producto);
+            printf("Robot 2 ignora producto %s y libera cinta\n", producto);
             sem_post(sem_prod);
         }
     }
 
     // 5. Enviar resultado por FIFO
-    int fifo_fd = open("robot1_fifo", O_WRONLY);
+    int fifo_fd = open("robot2_fifo", O_WRONLY);
     if (fifo_fd == -1) {
-        perror("Error al abrir el FIFO robot1_fifo");
+        perror("Error al abrir el FIFO robot2_fifo");
         return 1;
     }
 
     if (write(fifo_fd, &cp, sizeof(int)) == -1) {
-        perror("Error al escribir en el FIFO robot1_fifo");
+        perror("Error al escribir en el FIFO robot2_fifo");
         close(fifo_fd);
         return 1;
     }
@@ -90,5 +90,3 @@ int main() {
 
     return 0;
 }
-
-

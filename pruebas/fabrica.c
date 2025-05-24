@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
             cinta[0] = 'Z';
             cinta[1] = 'Z';
             sem_post(sem_cons);
-        }   
+        }
 
         munmap(cinta, sizeof(char) * 2);
         close(shm_fd);
