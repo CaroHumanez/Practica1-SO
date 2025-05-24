@@ -1,11 +1,14 @@
 //ROBOT1
 // robot1.c - Abre la memoria compartida "cinta_shm"
 
-#include <stdio.h>      
-#include <stdlib.h>     
-#include <fcntl.h>      
-#include <sys/mman.h>   
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <semaphore.h> 
 #include <unistd.h>     
+#include <sys/stat.h>     
 
 int main() {
     //variables y descriptor
