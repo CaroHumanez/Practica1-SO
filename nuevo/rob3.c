@@ -7,15 +7,22 @@
 #include <unistd.h>    
 #include <string.h>
 #include <semaphore.h>
+#include <errno.h>
+
+#define SHM_NAME "/cinta_shm"
+#define MUTEX "/mutex"
+#define SEM_BC "/sem_BC"
+#define DONE_BC "/done_BC"
+#define FIFO_ROBOT3 "robot3_fifo"
 
 int main() {
     int shm_fd;              
     char *cinta;
-    sem_t *sem_prod, *sem_cons;
+    sem_t *mutex, *sem_BC, *done_BC;
     int cp = 0;
 
     // 1. Abrir memoria compartida
-    shm_fd = shm_open("/cinta_shm", O_RDWR, 0660);
+    shm_fd = shm_open(SHM_NAME, O_RDWR, 0660);
     if (shm_fd == -1) {
         perror("No se pudo abrir la memoria compartida");
         exit(1);
@@ -29,23 +36,32 @@ int main() {
         exit(1);
     }
 
-    // 3. Abrir semáforos
-    sem_prod = sem_open("/sem_prod", 0);
-    if (sem_prod == SEM_FAILED) {
-        perror("robot3: Error al abrir semáforo /sem_prod");
+    // 3. Abrir semáforos correctos
+    mutex = sem_open(MUTEX, 0);
+    if (mutex == SEM_FAILED) {
+        perror("robot3: Error al abrir semáforo mutex");
         exit(1);
     }
 
-    sem_cons = sem_open("/sem_cons", 0);
-    if (sem_cons == SEM_FAILED) {
-        perror("robot3: Error al abrir semáforo /sem_cons");
+    sem_BC = sem_open(SEM_BC, 0);
+    if (sem_BC == SEM_FAILED) {
+        perror("robot3: Error al abrir semáforo sem_BC");
+        exit(1);
+    }
+
+    done_BC = sem_open(DONE_BC, 0);
+    if (done_BC == SEM_FAILED) {
+        perror("robot3: Error al abrir semáforo done_BC");
         exit(1);
     }
 
     // 4. Ciclo principal
     while (1) {
-        sem_wait(sem_cons); // Espera producto
+        sem_wait(sem_BC);   // Esperar a que haya un par BC disponible
 
+        sem_wait(mutex);    // Entrar sección crítica para leer la cinta
+
+        // Leer producto en memoria compartida
         char producto[3];
         producto[0] = cinta[0];
         producto[1] = cinta[1];
@@ -54,22 +70,24 @@ int main() {
         if (strcmp(producto, "BC") == 0) {
             printf("Robot 3 empaqueta productos BC\n");
             cp++;
+            sem_post(done_BC);
+            // Limpiar la cinta
             cinta[0] = '-';
             cinta[1] = '-';
-            sem_post(sem_prod);
         } else if (strcmp(producto, "ZZ") == 0) {
             printf("Robot 3 recibió el ZZ de fin\n");
-            sem_post(sem_prod); // liberar antes de salir
+            sem_post(mutex);
             break;
         } else {
-            // No es su producto → liberar cinta
-            printf("Robot 3 ignora producto %s y libera cinta\n", producto);
-            sem_post(sem_prod);
+            // En teoría no debería entrar aquí, pero por si acaso
+            printf("Robot 3 ignoró producto %s\n", producto);
         }
+
+        sem_post(mutex);    // Salir sección crítica
     }
 
     // 5. Enviar resultado por FIFO
-    int fifo_fd = open("robot3_fifo", O_WRONLY);
+    int fifo_fd = open(FIFO_ROBOT3, O_WRONLY);
     if (fifo_fd == -1) {
         perror("Error al abrir el FIFO robot3_fifo");
         return 1;
@@ -81,14 +99,14 @@ int main() {
         return 1;
     }
 
+    close(fifo_fd);
+
     // 6. Liberar recursos
     munmap(cinta, 2);
     close(shm_fd);
-    close(fifo_fd);
-    sem_close(sem_prod);
-    sem_close(sem_cons);
+    sem_close(mutex);
+    sem_close(sem_BC);
+    sem_close(done_BC);
 
     return 0;
 }
-
-

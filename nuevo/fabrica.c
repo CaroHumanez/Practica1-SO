@@ -16,11 +16,23 @@
 #define SEM_AB "/sem_AB"
 #define SEM_AC "/sem_AC"
 #define SEM_BC "/sem_BC"
+#define DONE_AB "/done_AB"
+#define DONE_AC "/done_AC"
+#define DONE_BC "/done_BC"
 #define FIFO_ROBOT1 "robot1_fifo"
 #define FIFO_ROBOT2 "robot2_fifo"
 #define FIFO_ROBOT3 "robot3_fifo"
 
 int main(int argc, char *argv[]) {
+
+    sem_unlink(MUTEX);
+    sem_unlink(SEM_AB);
+    sem_unlink(SEM_AC);
+    sem_unlink(SEM_BC);
+    sem_unlink(DONE_AB);
+    sem_unlink(DONE_AC);
+    sem_unlink(DONE_BC);
+
     if (argc != 2) {
         fprintf(stderr, "Uso: %s <N par>\n", argv[0]);
         exit(1);
@@ -62,11 +74,16 @@ int main(int argc, char *argv[]) {
     sem_t *sem_AB = sem_open(SEM_AB, O_CREAT, 0666, 0);
     sem_t *sem_AC = sem_open(SEM_AC, O_CREAT, 0666, 0);
     sem_t *sem_BC = sem_open(SEM_BC, O_CREAT, 0666, 0);
-    if (mutex == SEM_FAILED || sem_AB == SEM_FAILED || sem_AC == SEM_FAILED || sem_BC == SEM_FAILED) {
-    perror("sem_open");
-    exit(1);
-    }
 
+    sem_t *done_AB = sem_open(DONE_AB, O_CREAT | O_EXCL, 0660, 0);
+    sem_t *done_AC = sem_open(DONE_AC, O_CREAT | O_EXCL, 0660, 0);
+    sem_t *done_BC = sem_open(DONE_BC, O_CREAT | O_EXCL, 0660, 0);
+
+  if (mutex == SEM_FAILED || sem_AB == SEM_FAILED || sem_AC == SEM_FAILED || sem_BC == SEM_FAILED ||
+    done_AB == SEM_FAILED || done_AC == SEM_FAILED || done_BC == SEM_FAILED) {
+         perror("sem_open en fabrica");
+         exit(EXIT_FAILURE);
+  }   
 
     // Crear proceso hijo (productor)
     pid_t pid = fork();
@@ -103,9 +120,14 @@ int main(int argc, char *argv[]) {
         sem_t *sem_AB = sem_open(SEM_AB, 0);
         sem_t *sem_AC = sem_open(SEM_AC, 0);
         sem_t *sem_BC = sem_open(SEM_BC, 0);
-        if (mutex == SEM_FAILED || sem_AB == SEM_FAILED || sem_AC == SEM_FAILED || sem_BC == SEM_FAILED) {
-            perror("sem_open Hijo");
-            exit(1);
+        sem_t *done_AB = sem_open(DONE_AB, 0);
+        sem_t *done_AC = sem_open(DONE_AC, 0);
+        sem_t *done_BC = sem_open(DONE_BC, 0);
+
+        if (mutex == SEM_FAILED || sem_AB == SEM_FAILED || sem_AC == SEM_FAILED || sem_BC == SEM_FAILED ||
+            done_AB == SEM_FAILED || done_AC == SEM_FAILED || done_BC == SEM_FAILED) {
+            perror("sem_open en hijo productor");
+            exit(EXIT_FAILURE);
         }
 
         srand(time(NULL));
@@ -122,17 +144,23 @@ int main(int argc, char *argv[]) {
             printf("Producido: %c%c\n", cinta[0], cinta[1]);
             fflush(stdout);
 
+            // Liberar el mutex para que otros puedan acceder
+            sem_post(mutex);
+
             // Luego activamos el semáforo según el par generado
             if (par[0] == 'A' && par[1] == 'B') {
                 sem_post(sem_AB);
+                sem_wait(done_AB);
             } else if (par[0] == 'A' && par[1] == 'C') {
                 sem_post(sem_AC);
+                sem_wait(done_AC);
             } else if (par[0] == 'B' && par[1] == 'C') {
+                printf("envia bc");
                 sem_post(sem_BC);
+                sem_wait(done_BC);
             }
 
-            // Liberar el mutex para que otros puedan acceder
-            sem_post(mutex);
+            
         }
 
         // Señal de terminación para cada robot: producir par 'ZZ'
@@ -154,6 +182,9 @@ int main(int argc, char *argv[]) {
         sem_close(sem_AB);
         sem_close(sem_AC);
         sem_close(sem_BC);
+        sem_close(done_AB);
+        sem_close(done_AC);
+        sem_close(done_BC);
         exit(0);
     }
 
@@ -205,10 +236,10 @@ int main(int argc, char *argv[]) {
     sem_close(sem_AC);
     sem_close(sem_BC);
 
-    sem_unlink(MUTEX);
-    sem_unlink(SEM_AB);
-    sem_unlink(SEM_AC);
-    sem_unlink(SEM_BC);
+    sem_close(done_AB);
+    sem_close(done_AC);
+    sem_close(done_BC);
+
 
     munmap(cinta, sizeof(char) * 2);
     shm_unlink(SHM_NAME);
